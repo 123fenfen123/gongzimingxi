@@ -3,7 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>工资明细表 - 加班时薪修正</title>
+    <title>工资明细表</title>
+    
+    <!-- ========== PWA 优化 ========== -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="工资表">
+    <meta name="theme-color" content="#2c6e9c">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>">
+    
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <style>
         :root {
@@ -82,7 +90,6 @@
         .summary-table { background: #fcfcfc; }
         .yearly-total { background: #e8f5e9; font-weight: 700; }
         .table-wrapper { overflow-x: auto; }
-        /* 月份切换按钮 */
         .month-switcher {
             display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 15px;
         }
@@ -138,12 +145,10 @@
             ⑦ 每月下方显示该月汇总，实际发放可手动修改用于年报。
         </div>
 
-        <!-- 月份切换 -->
         <div class="month-switcher">
             <button v-for="m in 12" :key="'switch-'+m" :class="{active: selectedMonth===m}" @click="selectedMonth=m">{{ m }}月</button>
         </div>
 
-        <!-- 只显示选中月份 -->
         <div class="month-block" v-if="selectedMonth">
             <div class="month-title">
                 <span>{{ selectedMonth }}月（{{ daysInMonth(selectedMonth) }}天）</span>
@@ -442,7 +447,6 @@ const app = createApp({
         }
 
         const activeTab = ref('daily');
-        // 默认选中当前月份
         const selectedMonth = ref(new Date().getMonth() + 1);
 
         const yearData = computed(() => allData[currentYear.value] || createDefaultYearData(currentYear.value));
@@ -654,7 +658,6 @@ const app = createApp({
                 allData[currentYear.value] = createDefaultYearData(currentYear.value);
                 saveAll();
             }
-            // 切换年份后默认显示1月
             selectedMonth.value = 1;
         }
 
