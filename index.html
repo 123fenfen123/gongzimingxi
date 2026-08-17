@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>工资明细表 - 加班时薪修正</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        :root {
+            --primary: #2c6e9c;
+            --primary-light: #e3f2fd;
+            --bg: #f0f4f8;
+            --card: #ffffff;
+            --border: #d0d7de;
+            --text: #1f2d3d;
+            --manual-bg: #fff8dc;
+            --formula-bg: #f5f7fa;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            padding: 15px;
+            min-height: 100vh;
+            -webkit-text-size-adjust: 100%;
+        }
+        .app-container { max-width: 1200px; margin: 0 auto; }
+        header {
+            display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+            background: var(--card); padding: 15px 20px; border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08); margin-bottom: 20px;
+        }
+        header h1 { font-size: 1.5rem; font-weight: 600; color: var(--primary); }
+        .year-selector { display: flex; align-items: center; gap: 10px; margin-left: auto; flex-wrap: wrap; }
+        .year-selector select, .year-selector button {
+            padding: 8px 14px; border: 1px solid var(--border); border-radius: 6px;
+            background: white; font-size: 0.95rem; cursor: pointer;
+        }
+        .year-selector button { background: var(--primary); color: white; border: none; }
+        .year-selector button:hover { background: #1e5375; }
+        .tabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+        .tabs button {
+            padding: 10px 22px; border: none; border-radius: 20px; cursor: pointer;
+            font-size: 0.95rem; font-weight: 500; background: #e2e8f0; color: var(--text);
+            transition: all 0.2s;
+        }
+        .tabs button.active { background: var(--primary); color: white; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .card {
+            background: var(--card); border-radius: 12px; padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 20px;
+        }
+        .card h2 { font-size: 1.2rem; margin-bottom: 15px; color: var(--primary); border-bottom: 2px solid var(--primary-light); padding-bottom: 8px; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin-bottom: 10px; }
+        th, td { padding: 6px 4px; border: 1px solid var(--border); text-align: center; vertical-align: middle; white-space: nowrap; }
+        th { background: #f1f5f9; font-weight: 600; }
+        .manual-input { background: var(--manual-bg) !important; }
+        .formula-output { background: var(--formula-bg); font-weight: 500; }
+        input, select {
+            width: 100%; padding: 4px 6px; border: 1px solid var(--border); border-radius: 4px;
+            font-size: 0.85rem; background: white; transition: border 0.2s; min-width: 60px;
+        }
+        input:focus, select:focus { outline: none; border-color: var(--primary); }
+        .month-block { margin-bottom: 25px; }
+        .month-title {
+            font-weight: 600; margin: 10px 0 5px; padding: 8px 12px;
+            background: var(--primary-light); border-radius: 6px; color: var(--primary);
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .param-row {
+            display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; padding: 6px;
+            background: #fafbfc; border-radius: 6px;
+        }
+        .param-row label { font-size: 0.85rem; display: flex; align-items: center; gap: 5px; }
+        .param-row input { width: 80px; }
+        .note {
+            background: #e8f4fd; border-left: 4px solid var(--primary);
+            padding: 10px 15px; border-radius: 4px; margin-bottom: 15px; font-size: 0.9rem;
+        }
+        .summary-table { background: #fcfcfc; }
+        .yearly-total { background: #e8f5e9; font-weight: 700; }
+        .table-wrapper { overflow-x: auto; }
+        /* 月份切换按钮 */
+        .month-switcher {
+            display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 15px;
+        }
+        .month-switcher button {
+            padding: 6px 12px; border: 1px solid var(--border); border-radius: 15px;
+            background: white; cursor: pointer; font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+        .month-switcher button.active {
+            background: var(--primary); color: white; border-color: var(--primary);
+        }
+        @media (max-width: 768px) {
+            body { padding: 8px; }
+            header { padding: 10px; }
+            header h1 { font-size: 1.2rem; }
+            .tabs button { padding: 8px 15px; font-size: 0.85rem; }
+            .card { padding: 12px; }
+            table { font-size: 0.75rem; }
+            th, td { padding: 4px 2px; }
+            input, select { font-size: 0.75rem; padding: 3px 4px; }
+            .param-row input { width: 60px; }
+            .month-switcher button { padding: 4px 10px; font-size: 0.75rem; }
+        }
+    </style>
+</head>
+<body>
+<div id="app" class="app-container">
+    <header>
+        <h1>💰 工资明细表</h1>
+        <div class="year-selector">
+            <label>年份：</label>
+            <select v-model="currentYear" @change="loadYearData">
+                <option v-for="y in years" :key="y" :value="y">{{ y }}年</option>
+            </select>
+            <button @click="addNewYear">➕ 添加新年份</button>
+        </div>
+    </header>
+
+    <div class="tabs">
+        <button :class="{active: activeTab==='daily'}" @click="activeTab='daily'">📅 月度计划</button>
+        <button :class="{active: activeTab==='yearly'}" @click="activeTab='yearly'">📈 年度报表</button>
+    </div>
+
+    <div class="tab-content" :class="{active: activeTab==='daily'}">
+        <div class="note">
+            <strong>📌 使用说明：</strong><br>
+            ① 每天状态可下拉选择，修改后当日工资实时更新。<br>
+            ② 法定节假日（元旦、清明、劳动节、端午、中秋、国庆1-3日）自动设为“节假日”（双倍工资=日基本工资×2）；春节假期10天自动设为“带薪休假”（日基本工资），均可手动修改。<br>
+            ③ 日基本工资可修改，修改后当月及以后生效，之前月份不变。默认160元。<br>
+            ④ 上午休息工资 = 日基本工资 ÷ 7.5 × 4；下午休息工资 = 日基本工资 ÷ 7.5 × 3.5。<br>
+            ⑤ 加班工资规则：每满3小时按半天工资（日基本工资÷2）计算，另外每满3小时再额外加9元；不足3小时部分按小时计算（时薪=日基本工资÷6），不再额外加9元。<br>
+            ⑥ 月度汇总中的“加班费合计”按当月总加班小时数计算（先累加小时，再套用规则）。<br>
+            ⑦ 每月下方显示该月汇总，实际发放可手动修改用于年报。
+        </div>
+
+        <!-- 月份切换 -->
+        <div class="month-switcher">
+            <button v-for="m in 12" :key="'switch-'+m" :class="{active: selectedMonth===m}" @click="selectedMonth=m">{{ m }}月</button>
+        </div>
+
+        <!-- 只显示选中月份 -->
+        <div class="month-block" v-if="selectedMonth">
+            <div class="month-title">
+                <span>{{ selectedMonth }}月（{{ daysInMonth(selectedMonth) }}天）</span>
+                <span style="font-size:0.85rem; font-weight:normal;">
+                    日基本工资生效：{{ dailyBaseEffective[selectedMonth-1] }} ｜ 基本工资生效：{{ baseEffective[selectedMonth-1] }} ｜ 社保生效：{{ socialEffective[selectedMonth-1] }}
+                </span>
+            </div>
+
+            <div class="param-row">
+                <label>日基本工资：<input type="number" v-model.number="yearData.dailyBaseManual[selectedMonth-1]" placeholder="默认160" @input="saveAll"></label>
+                <label>基本工资：<input type="number" v-model.number="yearData.baseManual[selectedMonth-1]" placeholder="留空沿用上月" @input="saveAll"></label>
+                <label>社保扣款：<input type="number" v-model.number="yearData.socialManual[selectedMonth-1]" placeholder="留空沿用上月" @input="saveAll"></label>
+                <span style="font-size:0.8rem; color:#666;">（修改后本月及以后生效，之前月份不变）</span>
+            </div>
+
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>日期</th>
+                            <th>星期</th>
+                            <th>状态</th>
+                            <th>节日/备注</th>
+                            <th>加班小时</th>
+                            <th>日基本工资</th>
+                            <th>加班工资</th>
+                            <th>当日合计</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="day in getDaysInMonth(selectedMonth)" :key="day.dateStr">
+                            <td>{{ day.dateStr.slice(5) }}</td>
+                            <td>{{ day.weekday }}</td>
+                            <td>
+                                <select v-model="day.record.status" @change="saveDailyRecord(day.dateStr)">
+                                    <option v-for="s in statusOptions" :value="s">{{ s }}</option>
+                                </select>
+                            </td>
+                            <td><input type="text" v-model="day.record.note" placeholder="自动填充" @input="saveDailyRecord(day.dateStr)"></td>
+                            <td><input type="number" step="0.5" min="0" v-model.number="day.record.overtime" @input="saveDailyRecord(day.dateStr)"></td>
+                            <td class="formula-output">{{ calcDailyBase(day.record.status, day.dateStr) }}</td>
+                            <td class="formula-output">{{ calcOvertimePay(day.record.overtime, selectedMonth) }}</td>
+                            <td class="formula-output">{{ calcDailyBase(day.record.status, day.dateStr) + calcOvertimePay(day.record.overtime, selectedMonth) }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="table-wrapper">
+                <table class="summary-table">
+                    <thead>
+                        <tr>
+                            <th>应发工资</th>
+                            <th>加班费合计</th>
+                            <th>基本工资生效值</th>
+                            <th>当月剩余工资</th>
+                            <th>上月基本工资</th>
+                            <th>3个月前剩余</th>
+                            <th>社保扣款</th>
+                            <th>计算可拿</th>
+                            <th>实际发放（可修改）</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="formula-output">{{ monthlySummary[selectedMonth-1].totalEarned.toFixed(2) }}</td>
+                            <td class="formula-output">{{ monthlySummary[selectedMonth-1].overtimeTotal.toFixed(2) }}</td>
+                            <td class="formula-output">{{ baseEffective[selectedMonth-1] }}</td>
+                            <td class="formula-output">{{ monthlySummary[selectedMonth-1].remaining.toFixed(2) }}</td>
+                            <td class="formula-output">{{ monthlySummary[selectedMonth-1].prevBase.toFixed(2) }}</td>
+                            <td class="formula-output">{{ monthlySummary[selectedMonth-1].threeMonthRemaining.toFixed(2) }}</td>
+                            <td class="formula-output">{{ socialEffective[selectedMonth-1] }}</td>
+                            <td class="formula-output">{{ monthlySummary[selectedMonth-1].calcPay.toFixed(2) }}</td>
+                            <td class="manual-input"><input type="number" step="0.01" v-model.number="yearData.actual[selectedMonth-1]" placeholder="默认计算值" @input="saveAll"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card" v-if="!hasPrevYear && selectedMonth <= 3">
+            <h2>⚠️ 跨年历史数据（仅第一年需要手动填写）</h2>
+            <div style="display:flex; flex-wrap:wrap; gap:15px;">
+                <label>去年12月基本工资：<input type="number" v-model.number="yearData.manualPrevBase" placeholder="默认2180" @input="saveAll"></label>
+                <label>去年10月剩余：<input type="number" v-model.number="yearData.manualPrevRemaining[0]" placeholder="手动输入" @input="saveAll"></label>
+                <label>去年11月剩余：<input type="number" v-model.number="yearData.manualPrevRemaining[1]" placeholder="手动输入" @input="saveAll"></label>
+                <label>去年12月剩余：<input type="number" v-model.number="yearData.manualPrevRemaining[2]" placeholder="手动输入" @input="saveAll"></label>
+            </div>
+            <div style="font-size:0.85rem; color:#666; margin-top:5px;">若已有上一年数据，系统会自动关联，无需手动填写。</div>
+        </div>
+    </div>
+
+    <div class="tab-content" :class="{active: activeTab==='yearly'}">
+        <div class="card">
+            <h2>年度报表（{{ currentYear }}年）</h2>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>月份</th>
+                            <th>实际发放金额</th>
+                            <th>应发工资</th>
+                            <th>加班费合计</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="m in 12" :key="'yr-'+m">
+                            <td>{{ m }}月</td>
+                            <td>{{ getActualPay(m).toFixed(2) }}</td>
+                            <td>{{ monthlySummary[m-1].totalEarned.toFixed(2) }}</td>
+                            <td>{{ monthlySummary[m-1].overtimeTotal.toFixed(2) }}</td>
+                        </tr>
+                        <tr class="yearly-total">
+                            <td><strong>年度合计</strong></td>
+                            <td><strong>{{ yearlyTotalActual.toFixed(2) }}</strong></td>
+                            <td><strong>{{ yearlyTotalEarned.toFixed(2) }}</strong></td>
+                            <td><strong>{{ yearlyTotalOvertime.toFixed(2) }}</strong></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const { createApp, ref, reactive, computed, watch } = Vue;
+
+const STORAGE_KEY = 'salary_table_data_v3_fixed';
+const WEEKDAYS = ['日','一','二','三','四','五','六'];
+const STATUS_OPTIONS = ['正常上班','全天休息','上午休息','下午休息','带薪休假','节假日'];
+
+// 法定节假日数据（2026-2030）
+const HOLIDAYS = {
+    2026: {
+        '01-01': '元旦',
+        '02-16': '春节', '02-17': '春节', '02-18': '春节', '02-19': '春节', '02-20': '春节',
+        '02-21': '春节', '02-22': '春节', '02-23': '春节', '02-24': '春节', '02-25': '春节',
+        '04-05': '清明节',
+        '05-01': '劳动节',
+        '06-19': '端午节',
+        '09-25': '中秋节',
+        '10-01': '国庆节', '10-02': '国庆节', '10-03': '国庆节',
+    },
+    2027: {
+        '01-01': '元旦',
+        '02-05': '春节', '02-06': '春节', '02-07': '春节', '02-08': '春节', '02-09': '春节',
+        '02-10': '春节', '02-11': '春节', '02-12': '春节', '02-13': '春节', '02-14': '春节',
+        '04-05': '清明节',
+        '05-01': '劳动节',
+        '06-09': '端午节',
+        '09-15': '中秋节',
+        '10-01': '国庆节', '10-02': '国庆节', '10-03': '国庆节',
+    },
+    2028: {
+        '01-01': '元旦',
+        '01-25': '春节', '01-26': '春节', '01-27': '春节', '01-28': '春节', '01-29': '春节',
+        '01-30': '春节', '01-31': '春节', '02-01': '春节', '02-02': '春节', '02-03': '春节',
+        '04-04': '清明节',
+        '05-01': '劳动节',
+        '05-28': '端午节',
+        '10-03': '中秋节', // 中秋与国庆重叠
+        '10-01': '国庆节', '10-02': '国庆节', '10-03': '国庆节',
+    },
+    2029: {
+        '01-01': '元旦',
+        '02-12': '春节', '02-13': '春节', '02-14': '春节', '02-15': '春节', '02-16': '春节',
+        '02-17': '春节', '02-18': '春节', '02-19': '春节', '02-20': '春节', '02-21': '春节',
+        '04-04': '清明节',
+        '05-01': '劳动节',
+        '06-16': '端午节',
+        '09-22': '中秋节',
+        '10-01': '国庆节', '10-02': '国庆节', '10-03': '国庆节',
+    },
+    2030: {
+        '01-01': '元旦',
+        '02-02': '春节', '02-03': '春节', '02-04': '春节', '02-05': '春节', '02-06': '春节',
+        '02-07': '春节', '02-08': '春节', '02-09': '春节', '02-10': '春节', '02-11': '春节',
+        '04-05': '清明节',
+        '05-01': '劳动节',
+        '06-05': '端午节',
+        '09-12': '中秋节',
+        '10-01': '国庆节', '10-02': '国庆节', '10-03': '国庆节',
+    }
+};
+
+function daysInMonth(year, month) {
+    return new Date(year, month, 0).getDate();
+}
+
+function dateStr(year, month, day) {
+    return `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+}
+
+function defaultDailyRecord() {
+    return { status: '正常上班', note: '', overtime: 0 };
+}
+
+function generateDailyRecords(year) {
+    const daily = {};
+    for (let m = 1; m <= 12; m++) {
+        const days = daysInMonth(year, m);
+        for (let d = 1; d <= days; d++) {
+            const ds = dateStr(year, m, d);
+            const key = String(m).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+            const holidayData = HOLIDAYS[year] && HOLIDAYS[year][key];
+            if (holidayData) {
+                let status = '节假日';
+                let note = holidayData;
+                if (holidayData === '春节') {
+                    status = '带薪休假';
+                } else if (holidayData === '国庆节') {
+                    status = '节假日'; // 双倍
+                }
+                daily[ds] = { status, note, overtime: 0 };
+            } else {
+                daily[ds] = defaultDailyRecord();
+            }
+        }
+    }
+    return daily;
+}
+
+function createDefaultYearData(year) {
+    return {
+        baseManual: Array(12).fill(null),
+        socialManual: Array(12).fill(null),
+        dailyBaseManual: Array(12).fill(null),
+        daily: generateDailyRecords(year),
+        actual: Array(12).fill(null),
+        manualPrevBase: 2180,
+        manualPrevRemaining: [2000, 1800, 2200]
+    };
+}
+
+// 加班费计算：每满3小时按半天工资（日工资/2）加9元，余数按小时算（日工资/6）
+function calcOvertimePayGlobal(hours, dailyBaseValue) {
+    hours = Number(hours) || 0;
+    dailyBaseValue = dailyBaseValue || 160;
+    if (hours <= 0) return 0;
+    const halfDayPay = dailyBaseValue / 2;
+    const hourlyRate = dailyBaseValue / 6;
+    const fullBlocks = Math.floor(hours / 3);
+    const remainder = hours % 3;
+    return fullBlocks * (halfDayPay + 9) + remainder * hourlyRate;
+}
+
+// 日基本工资计算：包含上午休息、下午休息等规则
+function calcDailyBaseGlobal(status, dateStr, dailyBaseValue) {
+    dailyBaseValue = dailyBaseValue || 160;
+    let base;
+    switch(status) {
+        case '全天休息': 
+            base = 0; 
+            break;
+        case '上午休息': 
+            base = (dailyBaseValue / 7.5) * 4; 
+            break;
+        case '下午休息': 
+            base = (dailyBaseValue / 7.5) * 3.5; 
+            break;
+        case '带薪休假': 
+            base = dailyBaseValue; 
+            break;
+        case '节假日': 
+            base = dailyBaseValue * 2; 
+            break;
+        default: 
+            base = dailyBaseValue; // 正常上班
+    }
+    return base;
+}
+
+const app = createApp({
+    setup() {
+        let savedData = localStorage.getItem(STORAGE_KEY);
+        let allData = reactive(savedData ? JSON.parse(savedData) : {});
+
+        for (const year in allData) {
+            if (!allData[year].dailyBaseManual) {
+                allData[year].dailyBaseManual = Array(12).fill(null);
+            }
+        }
+
+        const currentYear = ref(new Date().getFullYear());
+        const years = ref(Object.keys(allData).map(Number).sort((a,b)=>a-b));
+
+        if (years.value.length === 0) {
+            years.value = [currentYear.value];
+            allData[currentYear.value] = createDefaultYearData(currentYear.value);
+        }
+        if (!years.value.includes(currentYear.value)) {
+            years.value.push(currentYear.value);
+            allData[currentYear.value] = createDefaultYearData(currentYear.value);
+            years.value.sort((a,b)=>a-b);
+        }
+
+        const activeTab = ref('daily');
+        // 默认选中当前月份
+        const selectedMonth = ref(new Date().getMonth() + 1);
+
+        const yearData = computed(() => allData[currentYear.value] || createDefaultYearData(currentYear.value));
+
+        const dailyBaseEffective = computed(() => {
+            const manual = yearData.value.dailyBaseManual || Array(12).fill(null);
+            const effective = [];
+            let prev = 160;
+            for (let i = 0; i < 12; i++) {
+                if (manual[i] !== null && manual[i] !== undefined) prev = manual[i];
+                effective.push(prev);
+            }
+            return effective;
+        });
+
+        const baseEffective = computed(() => {
+            const manual = yearData.value.baseManual;
+            const effective = [];
+            let prev = 2180;
+            for (let i = 0; i < 12; i++) {
+                if (manual[i] !== null && manual[i] !== undefined) prev = manual[i];
+                effective.push(prev);
+            }
+            return effective;
+        });
+
+        const socialEffective = computed(() => {
+            const manual = yearData.value.socialManual;
+            const effective = [];
+            let prev = 524;
+            for (let i = 0; i < 12; i++) {
+                if (manual[i] !== null && manual[i] !== undefined) prev = manual[i];
+                effective.push(prev);
+            }
+            return effective;
+        });
+
+        const hasPrevYear = computed(() => {
+            return allData[currentYear.value - 1] !== undefined;
+        });
+
+        function getDaysInMonth(month) {
+            const year = currentYear.value;
+            const days = daysInMonth(year, month);
+            const result = [];
+            for (let d = 1; d <= days; d++) {
+                const ds = dateStr(year, month, d);
+                let record = yearData.value.daily[ds] || defaultDailyRecord();
+                if (!yearData.value.daily[ds]) {
+                    yearData.value.daily[ds] = record;
+                }
+                const date = new Date(year, month-1, d);
+                result.push({
+                    dateStr: ds,
+                    weekday: WEEKDAYS[date.getDay()],
+                    record: record
+                });
+            }
+            return result;
+        }
+
+        function calcDailyBase(status, dateStr) {
+            const parts = dateStr.split('-');
+            const month = parseInt(parts[1]);
+            const dailyBaseValue = dailyBaseEffective.value[month-1];
+            return calcDailyBaseGlobal(status, dateStr, dailyBaseValue);
+        }
+
+        function calcOvertimePay(hours, month) {
+            const dailyBaseValue = dailyBaseEffective.value[month-1];
+            return calcOvertimePayGlobal(hours, dailyBaseValue);
+        }
+
+        function calcMonthRemaining(year, month) {
+            if (!allData[year]) return null;
+            const data = allData[year];
+            const days = daysInMonth(year, month);
+
+            const dailyManual = data.dailyBaseManual || Array(12).fill(null);
+            let dailyBaseEff = 160;
+            for (let i = 0; i < month; i++) {
+                if (dailyManual[i] !== null && dailyManual[i] !== undefined) dailyBaseEff = dailyManual[i];
+            }
+
+            let total = 0;
+            for (let d = 1; d <= days; d++) {
+                const ds = dateStr(year, month, d);
+                const rec = data.daily && data.daily[ds];
+                if (rec) {
+                    total += calcDailyBaseGlobal(rec.status, ds, dailyBaseEff) + calcOvertimePayGlobal(rec.overtime, dailyBaseEff);
+                }
+            }
+
+            const baseManual = data.baseManual || Array(12).fill(null);
+            let baseEff = 2180;
+            for (let i = 0; i < month; i++) {
+                if (baseManual[i] !== null && baseManual[i] !== undefined) baseEff = baseManual[i];
+            }
+            return total - baseEff;
+        }
+
+        const monthlySummary = computed(() => {
+            const summaries = [];
+            const year = currentYear.value;
+            for (let m = 1; m <= 12; m++) {
+                const days = daysInMonth(year, m);
+                let totalEarned = 0;
+                let totalOvertimeHours = 0;
+                for (let d = 1; d <= days; d++) {
+                    const ds = dateStr(year, m, d);
+                    const rec = yearData.value.daily[ds] || defaultDailyRecord();
+                    const dailyBaseValue = dailyBaseEffective.value[m-1];
+                    const base = calcDailyBaseGlobal(rec.status, ds, dailyBaseValue);
+                    const ot = calcOvertimePayGlobal(rec.overtime, dailyBaseValue);
+                    totalEarned += base + ot;
+                    totalOvertimeHours += Number(rec.overtime) || 0;
+                }
+                const overtimeTotal = calcOvertimePayGlobal(totalOvertimeHours, dailyBaseEffective.value[m-1]);
+
+                const baseEff = baseEffective.value[m-1];
+                const remaining = totalEarned - baseEff;
+                let prevBase;
+                if (m === 1) {
+                    const prevYear = year - 1;
+                    if (allData[prevYear]) {
+                        const prevManual = allData[prevYear].baseManual || Array(12).fill(null);
+                        let lastEff = 2180;
+                        for (let i = 0; i < 12; i++) {
+                            if (prevManual[i] !== null && prevManual[i] !== undefined) lastEff = prevManual[i];
+                        }
+                        prevBase = lastEff;
+                    } else {
+                        prevBase = yearData.value.manualPrevBase || 2180;
+                    }
+                } else {
+                    prevBase = baseEffective.value[m-2];
+                }
+                let threeMonthRemaining;
+                if (m <= 3) {
+                    const prevYear = year - 1;
+                    const prevMonth = m + 9;
+                    const calculated = calcMonthRemaining(prevYear, prevMonth);
+                    if (calculated !== null) {
+                        threeMonthRemaining = calculated;
+                    } else {
+                        threeMonthRemaining = yearData.value.manualPrevRemaining[m-1] || 0;
+                    }
+                } else {
+                    const idx = m - 4;
+                    threeMonthRemaining = summaries[idx] ? summaries[idx].remaining : 0;
+                }
+                const social = socialEffective.value[m-1];
+                const calcPay = prevBase + threeMonthRemaining - social;
+                summaries.push({
+                    totalEarned,
+                    overtimeTotal,
+                    baseEff,
+                    remaining,
+                    prevBase,
+                    threeMonthRemaining,
+                    social,
+                    calcPay
+                });
+            }
+            return summaries;
+        });
+
+        function getActualPay(month) {
+            const actual = yearData.value.actual[month-1];
+            if (actual !== null && actual !== undefined && actual !== '') return Number(actual);
+            return monthlySummary.value[month-1].calcPay;
+        }
+
+        const yearlyTotalActual = computed(() => {
+            let sum = 0;
+            for (let m = 1; m <= 12; m++) sum += getActualPay(m);
+            return sum;
+        });
+        const yearlyTotalEarned = computed(() => monthlySummary.value.reduce((s, x) => s + x.totalEarned, 0));
+        const yearlyTotalOvertime = computed(() => monthlySummary.value.reduce((s, x) => s + x.overtimeTotal, 0));
+
+        function saveAll() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(allData));
+        }
+
+        function saveDailyRecord(dateStr) {
+            if (!yearData.value.daily[dateStr]) {
+                yearData.value.daily[dateStr] = defaultDailyRecord();
+            }
+            saveAll();
+        }
+
+        function addNewYear() {
+            const newYear = Math.max(...years.value) + 1;
+            if (!allData[newYear]) {
+                allData[newYear] = createDefaultYearData(newYear);
+                years.value.push(newYear);
+                years.value.sort((a,b)=>a-b);
+                currentYear.value = newYear;
+                saveAll();
+            } else {
+                alert('该年份已存在');
+            }
+        }
+
+        function loadYearData() {
+            saveAll();
+            if (!allData[currentYear.value]) {
+                allData[currentYear.value] = createDefaultYearData(currentYear.value);
+                saveAll();
+            }
+            // 切换年份后默认显示1月
+            selectedMonth.value = 1;
+        }
+
+        watch(currentYear, (newVal, oldVal) => {
+            if (newVal !== oldVal) loadYearData();
+        });
+
+        watch(yearData, () => saveAll(), { deep: true });
+
+        saveAll();
+
+        return {
+            currentYear, years, activeTab, selectedMonth,
+            yearData, dailyBaseEffective, baseEffective, socialEffective,
+            statusOptions: STATUS_OPTIONS,
+            hasPrevYear,
+            daysInMonth,
+            getDaysInMonth, calcDailyBase, calcOvertimePay,
+            monthlySummary, getActualPay, yearlyTotalActual, yearlyTotalEarned, yearlyTotalOvertime,
+            saveAll, saveDailyRecord, addNewYear, loadYearData
+        };
+    }
+});
+
+app.mount('#app');
+</script>
+</body>
+</html>
